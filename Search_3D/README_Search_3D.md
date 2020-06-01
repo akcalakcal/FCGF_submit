@@ -112,8 +112,8 @@ $ ./run_single_pcd_FCGF_ext.sh
 If you can not run the feature extractor, don't worry. 
 There is a previusly computed FCGF features and point cloud pair available 
 under these directories. We can use them in the following steps. 
- 	*point cloud -> ${Main_folder}/FCGF_submit/data_test/tmp/7-scenes-redkitchen/cloud_bin_0.ply
-	*FCGF features -> ${Main_folder}/FCGF_submit/features_tmp/7-scenes-redkitchen/cloud_bin_0.npz
+* point cloud -> ${Main_folder}/FCGF_submit/data_test/tmp/7-scenes-redkitchen/cloud_bin_0.ply
+* FCGF features -> ${Main_folder}/FCGF_submit/features_tmp/7-scenes-redkitchen/cloud_bin_0.npz
 
 
 ### 
@@ -124,10 +124,10 @@ under these directories. We can use them in the following steps.
 Note. If you want to run only this part, you don't need to install PyTorch and Minkowski Engine. 
 
 
-If you fetch repository from "https://github.com/akcalakcal/FCGF_submit.git"
+If you fetch repository from "https://github.com/akcalakcal/FCGF_submit.git", 
 you will have input point cloud and associated FCGF features under following paths
-	*point cloud -> ${Main_folder}/FCGF_submit/data_test/tmp/7-scenes-redkitchen/cloud_bin_0.ply
-	*FCGF features -> ${Main_folder}/FCGF_submit/features_tmp/7-scenes-redkitchen/cloud_bin_0.npz
+* point cloud -> ${Main_folder}/FCGF_submit/data_test/tmp/7-scenes-redkitchen/cloud_bin_0.ply
+* FCGF features -> ${Main_folder}/FCGF_submit/features_tmp/7-scenes-redkitchen/cloud_bin_0.npz
 
 Main Part - 2  can start given a point cloud and its FCGF features. 
 
