@@ -55,7 +55,7 @@ If I had a chance to update my CUDA version, I would have designed this system a
 
 ## Installation & Dataset Download
 
-# -> Setup anaconda environment (If it is necessary)
+Setup anaconda environment (If it is necessary)
 $ ./setup_new_virtual_env.sh
 
 # Clone the project repository from "https://github.com/akcalakcal/FCGF_submit.git" under Main_Folder path (Please follow the folder structure above)
