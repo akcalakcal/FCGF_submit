@@ -13,28 +13,28 @@ If I had a chance to update my CUDA version, I would have designed this system a
 
 ## Folder Structure
 
- _ Main Folder
-	_ FCGF_submit
-		_ ...
-		_ scripts/
-		_ data/
-			_ threedmatch/
-		_ data_test/
-			_ tmp/
-				_7-scenes-redkitchen/
-					_ cloud_bin_0.ply
-		_ features_tmp/
-			_7-scenes-redkitchen/
-				_ cloud_bin_0.npz
-		_ outputs_trained_models/
-		_ README.md (Read it for the installation)
-		_ ...
-		_ Search_3D (This part is VLAD Descriptor and Query Search Part)
-			_ util/
-			_ VLADlib/
-			_ README_Search_3D.md
-			_ main_single_pcd.py
-			_ run_3D_search_single_pcd.sh
+ * Main Folder
+	* FCGF_submit
+		* ...
+		* scripts/
+		* data/
+			* threedmatch/
+		* data_test/
+			* tmp/
+				* 7-scenes-redkitchen/
+					* cloud_bin_0.ply
+		* features_tmp/
+			* 7-scenes-redkitchen/
+				* cloud_bin_0.npz
+		* outputs_trained_models/
+		* README.md (Read it for the installation)
+		* ...
+		* Search_3D (This part is VLAD Descriptor and Query Search Part)
+			* util/
+			* VLADlib/
+			* README_Search_3D.md
+			* main_single_pcd.py
+			* run_3D_search_single_pcd.sh
 
 			
 
