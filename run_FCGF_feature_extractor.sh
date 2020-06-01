@@ -1,6 +1,6 @@
 pythonPath=/vol/research/ucdatasets/MPSD/akin_tmp/miniconda3/envs/pytorch/bin/
 sourcePath=/vol/research/ucdatasets/MPSD/akin_tmp/src/FCGF_submit/
-dataFolder=/vol/research/ucdatasets/MPSD/akin_tmp/src/FCGF/data_test/tmp/
+dataFolder=/vol/research/ucdatasets/MPSD/akin_tmp/src/FCGF_submit/data_test/tmp/
 featureExtFolder=/vol/research/ucdatasets/MPSD/akin_tmp/src/FCGF_submit/features_tmp/
 trainedModel=/vol/research/ucdatasets/MPSD/akin_tmp/src/FCGF_submit/outputs_trained_models/checkpoint.pth
 
