@@ -8,7 +8,7 @@ import argparse
 import logging
 import open3d as o3d
 
-sys.path.append("/vol/research/ucdatasets/MPSD/akin_tmp/src/FCGF/")
+sys.path.append("/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/")
 
 from lib.timer import Timer, AverageMeter
 
