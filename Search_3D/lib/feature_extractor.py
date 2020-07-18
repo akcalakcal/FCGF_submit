@@ -68,6 +68,9 @@ class FeatureExtractor:
             fi = pointcloudpath
             pcd = o3d.io.read_point_cloud(fi)
 
+            #pcd = pcd.voxel_down_sample(voxel_size=0.001)
+
+
             xyz_down, feature = extract_features(
                 model,
                 xyz=np.array(pcd.points),

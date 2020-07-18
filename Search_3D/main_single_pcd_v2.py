@@ -8,6 +8,10 @@ import os
 
 import copy
 
+import tkinter.filedialog
+
+
+
 
 from lib.feature_extractor import FeatureExtractor
 
@@ -24,6 +28,9 @@ import glob
 import cv2
 
 import time
+
+from tqdm import tqdm
+
 
 import random
 from pathlib import Path
@@ -51,10 +58,13 @@ def visualize_point_cloud(pcd_list):
     ## 1-> json cmaera parameters change H,W
     ## 2-> add screen capture feature
 
+    #vis.get_render_option().load_from_json("./renderoption.json")
+
     vis.run()
     vis.destroy_window()
 
 def convertMeshBox2LineBox(mesh_box, color_select):
+
     points = np.array(mesh_box.vertices)
     lines = [[0, 1], [0, 2], [1, 3], [2, 3],
              [4, 5], [4, 6], [5, 7], [6, 7],
@@ -72,19 +82,21 @@ def convertMeshBox2LineBox(mesh_box, color_select):
 
 class Search3D:
 
-    def __init__(self, path_to_pcd, path_query_pcd, path_to_feat, isVisualizationON):
+    def __init__(self, path_to_pcd, path_query_pcd, path_to_feat, isVisualizationON, input_type):
         self.path_to_pcd = path_to_pcd # Path to point cloud file
         self.path_to_feat = path_to_feat # Path to feature file
         self.path_query_pcd = path_query_pcd
         self.voxel_size = 0.025
         self.read_inputs()
-        self.k = 16  # no. of visual words used for VisualDictionary Generation
-        self.sample_step_size = 300 #30 #100
+        self.k = 4 #2 #16  # no. of visual words used for VisualDictionary Generation
+        self.sample_step_size = 10 #100 #300 #30 #100
         self.leafSize = 40 # leafsize for "indexBallTree"
         self.k_retrieve = 3 # number of retrieved box
         self.color_dict={"black":[0,0,0], "blue":[0,0,1]}
         self.isSearchAvaliable = True
         self.visualization = isVisualizationON
+        self.input_type = input_type
+        self.pcd_apart = 10
 
     def read_inputs(self):
         data_i = np.load(self.path_to_feat)
@@ -173,8 +185,28 @@ class Search3D:
         self.pointCoords=list()
         self.meshBox=list()
 
+        ## DEBUG
+
+        if self.input_type == 'mesh':
+            pcd_in = o3d.io.read_triangle_mesh(self.path_query_pcd)
+            pcd_in.compute_vertex_normals()
+        if self.input_type == 'pcd':
+            pcd_in = o3d.io.read_point_cloud(self.path_query_pcd)
+        dummy_box = pcd_in.get_axis_aligned_bounding_box()
+
+        box_scale = 1.2  # 0.5
+        box_w_max = dummy_box.max_bound
+        box_w_min = dummy_box.min_bound
+        box_w_x = box_scale * abs(box_w_max[0] - box_w_min[0])
+        box_w_y = box_scale * abs(box_w_max[1] - box_w_min[1])
+        box_w_z = box_scale * abs(box_w_max[2] - box_w_min[2])
+
+
+        ## DEBUG
+
         ## For each box in the point cloud, VLAD descriptors are computed.
-        for ind_p in list(range(0, self.coord_i.shape[0],self.sample_step_size)):
+        ##for ind_p in list(range(0, self.coord_i.shape[0],self.sample_step_size)):
+        for ind_p in tqdm(range(0, self.coord_i.shape[0],self.sample_step_size)):
         #for ind_p in list(range(0, 10000,self.sample_step_size)):
 
             ## Create mesh_box - experiment
@@ -184,16 +216,6 @@ class Search3D:
 
             ## DEBUG
 
-            pcd_in = o3d.io.read_triangle_mesh(self.path_query_pcd)
-            pcd_in.compute_vertex_normals()
-            dummy_box = pcd_in.get_axis_aligned_bounding_box()
-
-            box_scale = 1.2  # 0.5
-            box_w_max = dummy_box.max_bound
-            box_w_min = dummy_box.min_bound
-            box_w_x = box_scale * abs(box_w_max[0] - box_w_min[0])
-            box_w_y = box_scale * abs(box_w_max[1] - box_w_min[1])
-            box_w_z = box_scale * abs(box_w_max[2] - box_w_min[2])
             ## Creation of a box
             mesh_box = o3d.geometry.TriangleMesh.create_box(width=box_w_x, height=box_w_y, depth=box_w_z)
             mesh_box.paint_uniform_color([0.9, 0.1, 0.1])
@@ -204,7 +226,6 @@ class Search3D:
             mat_trans[1, 3] = -box_w_y / 2
             mat_trans[2, 3] = -box_w_z / 2
             mesh_box.transform(mat_trans)
-
 
             ## DEBUG
 
@@ -282,10 +303,15 @@ class Search3D:
         #pcd_match = points_2_pointcloud(self.pcd_i.points)
 
         ## DEBUG read mesh instead of point cloud
-        self.pcd_i = o3d.io.read_triangle_mesh(self.path_to_pcd)
-        self.pcd_i.compute_vertex_normals()
-        pcd_match = o3d.io.read_triangle_mesh(self.path_to_pcd)
-        pcd_match.compute_vertex_normals()
+        if self.input_type == 'mesh':
+            self.pcd_i = o3d.io.read_triangle_mesh(self.path_to_pcd)
+            self.pcd_i.compute_vertex_normals()
+            pcd_match = o3d.io.read_triangle_mesh(self.path_to_pcd)
+            pcd_match.compute_vertex_normals()
+        elif self.input_type == 'pcd':
+            self.pcd_i = o3d.io.read_point_cloud(self.path_to_pcd)
+            pcd_match = o3d.io.read_point_cloud(self.path_to_pcd)
+
         #o3d.visualization.draw_geometries([pcd_match])
         ## DEBUG
 
@@ -363,7 +389,7 @@ class Search3D:
             else:
                 self.isSearchAvaliable = False
 
-    def query_given_BB(self, boxId, k_NN):
+    def query_given_BB(self, boxId, k_NN, feat_extractor):
 
         self.k_retrieve = k_NN
 
@@ -374,16 +400,33 @@ class Search3D:
         #pcd_match = points_2_pointcloud(self.pcd_i.points)
 
         ## DEBUG read mesh instead of point cloud
-        self.pcd_i = o3d.io.read_triangle_mesh(self.path_to_pcd)
-        self.pcd_i.compute_vertex_normals()
-        pcd_match = o3d.io.read_triangle_mesh(self.path_to_pcd)
-        pcd_match.compute_vertex_normals()
+        if self.input_type == 'mesh':
+            self.pcd_i = o3d.io.read_triangle_mesh(self.path_to_pcd)
+            self.pcd_i.compute_vertex_normals()
+            pcd_match = o3d.io.read_triangle_mesh(self.path_to_pcd)
+            pcd_match.compute_vertex_normals()
+        elif self.input_type == 'pcd':
+            self.pcd_i = o3d.io.read_point_cloud(self.path_to_pcd)
+            pcd_match = o3d.io.read_point_cloud(self.path_to_pcd)
         #o3d.visualization.draw_geometries([pcd_match])
+
+        ## Distance between point clouds
+
+        dummy_box = pcd_match.get_axis_aligned_bounding_box()
+
+        box_w_max = dummy_box.max_bound
+        box_w_min = dummy_box.min_bound
+        self.pcd_apart = 1.5 * abs(box_w_max[0] - box_w_min[0])
+
+
+        ## Distance between point clouds
+
+
         ## DEBUG
 
         ## Translate pcd match to the right for visualization
         mat_trans = np.eye(4)
-        mat_trans[0, 3] = 15.0 #3.0  # 4.0
+        mat_trans[0, 3] = self.pcd_apart #3.5 #3.0  # 4.0
         mat_trans[1, 3] = 0
         mat_trans[2, 3] = 0
         pcd_match.transform(mat_trans)
@@ -406,12 +449,37 @@ class Search3D:
 
             ## TODO: extract FCGF feature for query point cloud here
 
-            # I am here
+            #target_folder_path = os.path.dirname(os.path.abspath(self.path_query_pcd))
+            #file_path_query_feat_i = feat_extractor.extract(self.path_query_pcd, target_folder_path)
+
+            #data_query_i = np.load(file_path_query_feat_i)
+            #query_coord_i, query_points_i, query_feat_i = data_query_i['xyz'], data_query_i['points'], data_query_i['feature']
+            #query_pcd_i = points_2_pointcloud(query_coord_i)
+
+            ## DEBUG
+
+            pcd_in_query = o3d.io.read_triangle_mesh(self.path_query_pcd)
+            BB_pcd_in_query = pcd_in_query.get_axis_aligned_bounding_box()
+
+
+            box_p_query_ind = []
+            for p_q in pcd_in_query.vertices:
+                index_pos = np.where((self.coord_i[:,0] == p_q[0]) & (self.coord_i[:, 1] == p_q[1]) & (self.coord_i[:, 2] == p_q[2]))
+                if index_pos[0]:
+                    box_p_query_ind.append(index_pos[0])
+
+            ## Container for FCGF features of points in the query Box
+            box_p_query_ind = np.array(box_p_query_ind)[:,0]
+            box_p_query_feat = self.feat_i[box_p_query_ind, :]
+
+
+            ## DEBUG
 
             #
 
             ## Fetching the feature vector of the box, which is previously computed
-            queryBox_descriptor_FGCF = self.descriptorFCGF[boxId]
+            queryBox_descriptor_FGCF = box_p_query_feat #self.descriptorFCGF[boxId]
+            #queryBox_descriptor_FGCF = query_feat_i
             v = VLAD(queryBox_descriptor_FGCF, self.visualDictionary)
             v = v.reshape(1, -1)
 
@@ -426,24 +494,55 @@ class Search3D:
             visual_list.append(spheres_match_i)
 
             # Draw the box - Query
-            mesh_box_vertices_query = self.meshBox[boxId]
-            ## Matched box is colored in black
-            lines_set_query_box = convertMeshBox2LineBox(mesh_box_vertices_query, self.color_dict["black"])
-            visual_list.append(lines_set_query_box)
+
+
+            visual_list.append(BB_pcd_in_query)
 
 
             ## Iteration through neaarest neighor matches
             ## and draw each box on the point cloud
+            mesh_box_stack = []
+            tmp_cnt = 0
             for ind_match in ind[0]:
+
+                # Init
+                IoU = False
 
                 ## Draw the box - Match
                 mesh_box_vertices_match = copy.deepcopy(self.meshBox[ind_match])
-                mesh_box_vertices_match.transform(mat_trans)
-                ## Matched box is colored in blue
-                lines_set_match_box = convertMeshBox2LineBox(mesh_box_vertices_match, self.color_dict["blue"])
 
-                visual_list.append(lines_set_match_box)
+                if tmp_cnt == 0:
+                    mesh_box_stack.append(copy.deepcopy(mesh_box_vertices_match))
+                    mesh_box_vertices_match.transform(mat_trans)
+                    ## Matched box is colored in blue
+                    lines_set_match_box = convertMeshBox2LineBox(mesh_box_vertices_match, self.color_dict["blue"])
+                    visual_list.append(lines_set_match_box)
 
+                ## TODO: Compare matched mesh boxes wrt Intersection over Union (IoU)
+                if tmp_cnt > 0:
+
+                    #IoU = mesh_box_stack[-1].is_intersecting(mesh_box_vertices_match)
+
+                    for m_tmp in mesh_box_stack:
+                        IoU_t = m_tmp.is_intersecting(mesh_box_vertices_match)
+                        IoU = IoU or IoU_t
+
+                    if not IoU:
+                        mesh_box_stack.append(copy.deepcopy(mesh_box_vertices_match))
+
+                        mesh_box_vertices_match.transform(mat_trans)
+                        ## Matched box is colored in blue
+                        lines_set_match_box = convertMeshBox2LineBox(mesh_box_vertices_match, self.color_dict["blue"])
+
+                        visual_list.append(lines_set_match_box)
+
+
+                #visual_list_tmp = visual_list.copy()
+                #visual_list_tmp.append(lines_set_match_box)
+
+                #visualize_point_cloud(visual_list_tmp)
+
+                tmp_cnt = tmp_cnt + 1
 
             if self.visualization:
                 visualize_point_cloud(visual_list)
@@ -451,8 +550,24 @@ class Search3D:
                 decision = input('Do you want to continue to searching another box? Y or N? \n')
 
                 if decision.capitalize() == 'Y':
-                    selected_boxId = input('Select boxId for another query search between 0 and {} \n'.format(self.No_box))
-                    boxId = int(selected_boxId)
+                    #selected_boxId = input('Select boxId for another query search between 0 and {} \n'.format(self.No_box))
+                    #boxId = int(selected_boxId)
+                    ## Select A Bounding Box Again
+                    if self.input_type == 'pcd':
+                        # pcd_in = o3d.io.read_triangle_mesh(file_path_pcd_i)
+                        pcd_in = o3d.io.read_point_cloud(self.path_to_pcd)
+                        # pcd_in.compute_vertex_normals()
+                        # o3d.visualization.draw_geometries([pcd_in])
+                        demo_crop_geometry(pcd_in)
+                    elif self.input_type == 'mesh':
+                        pcd_in = o3d.io.read_triangle_mesh(self.path_to_pcd)
+                        pcd_in.compute_vertex_normals()
+                        demo_crop_geometry(pcd_in)
+
+                    ## Extract Vlad Descriptors given new =ly selected BB
+                    self.extractBoxes_VLADdesc_given_BB()
+
+                    self.query_given_BB(boxId, k_NN, feat_extractor)
                     print('Another query search is started using boxId = {} \n'.format(boxId))
                 elif decision.capitalize() == 'N':
                     self.isSearchAvaliable = False
@@ -460,6 +575,7 @@ class Search3D:
                     print('Another query search is started using boxId = {} \n'.format(boxId))
             else:
                 self.isSearchAvaliable = False
+            
 
 
 def pick_points(pcd):
@@ -495,15 +611,26 @@ def main(args):
     ## Reading the arguments
     args = vars(args)
     #PATH_PCD = args["path_pointcloud"]
+
     #PATH_PCD = "/home/akin/workspace/All_Data/Indoor_Lidar_RGBD_Scan_Dataset/Apartment/Reconstruction/ours_apartment/apartment.ply"
-    PATH_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_7_frag.ply"
-    #PATH_PCD = "/home/akin/workspace/All_Data/Tanks_and_Templates/Church/Reconstruction/Church_COLMAP.ply"
-    #PATH_PCD = "/home/akin/workspace/All_Data/Tanks_and_Templates/Church/GT/Church.ply"
+    #PATH_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_7_frag.ply"
+    #PATH_QUERY_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_7.ply"
 
-    PATH_QUERY_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_7.ply"
+    PATH_PCD = "/home/akin/workspace/All_Data/Tanks_and_Templates/Caterpillar/GT/Caterpillar.ply"
+    PATH_QUERY_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_query.ply"
 
-    input_type = 'mesh'
-    selection_tool = False
+    ## User dialog for input file
+
+
+    #PATH_PCD = askopenfilename()
+    PATH_PCD = tkinter.filedialog.askopenfilename()
+
+
+    ##
+
+    input_type = 'pcd' #'mesh'
+    selection_tool = 1
+    FCGF_vis = 0 #False
 
     PATH_FEATURE = args["path_feature"]
     k_NN = args["k_nearest_neighbor"]
@@ -571,12 +698,13 @@ def main(args):
             #pcd_in = o3d.io.read_triangle_mesh(file_path_pcd_i)
             pcd_in = o3d.io.read_point_cloud(file_path_pcd_i)
             #pcd_in.compute_vertex_normals()
+            #o3d.visualization.draw_geometries([pcd_in])
             demo_crop_geometry(pcd_in)
         elif input_type == 'mesh':
             pcd_in = o3d.io.read_triangle_mesh(file_path_pcd_i)
             pcd_in.compute_vertex_normals()
             demo_crop_geometry(pcd_in)
-
+        #sys.exit()
     ##
 
     ## TODO: Add feature extraction module here
@@ -590,12 +718,37 @@ def main(args):
     ##
 
 
-    '''
-    ## TODO: Visualize input point cloud FCGF features
 
-    data_i = np.load(file_path_feat_i)
+    ## TODO: Visualize input point cloud FCGF features
+    if FCGF_vis:
+        data_i = np.load(file_path_feat_i)
+        coord_i, points_i, feat_i = data_i['xyz'], data_i['points'], data_i['feature']
+        pcd_i = o3d.io.read_point_cloud(file_path_pcd_i)
+        pcd_match = points_2_pointcloud(coord_i)
+        voxel_size = 0.05 #0.025
+
+        pcd_in_FCGF = get_colored_point_cloud_feature(pcd_match, feat_i, voxel_size)
+
+        file_name_FCGF_folder = os.path.dirname(os.path.abspath(file_path_query_pcd))
+        file_name_FCGF_name = os.path.basename(file_path_query_pcd)
+        file_name_FCGF_name = os.path.splitext(file_name_FCGF_name)[0]
+        file_name_FCGF = file_name_FCGF_folder + "/" + file_name_FCGF_name + "_FCGF_" + str(voxel_size) + ".ply"
+        o3d.io.write_triangle_mesh(file_name_FCGF, pcd_in_FCGF)
+        o3d.visualization.draw_geometries([pcd_in_FCGF])
+
+        sys.exit()
+
+
+    '''
+    ## TODO: Visualize input point cloud FCGF features - Query
+
+    feat_extractor = FeatureExtractor(model_path)
+    target_query_folder_path = os.path.dirname(os.path.abspath(file_path_query_pcd))
+    file_path_query_feat_i = feat_extractor.extract(file_path_query_pcd, target_query_folder_path)
+
+    data_i = np.load(file_path_query_feat_i)
     coord_i, points_i, feat_i = data_i['xyz'], data_i['points'], data_i['feature']
-    pcd_i = o3d.io.read_point_cloud(file_path_pcd_i)
+    pcd_i = o3d.io.read_point_cloud(file_path_query_pcd)
     pcd_match = points_2_pointcloud(coord_i)
     voxel_size = 0.025
     pcd_in_FCGF = get_colored_point_cloud_feature(pcd_match, feat_i, voxel_size)
@@ -603,10 +756,9 @@ def main(args):
     o3d.visualization.draw_geometries([pcd_in_FCGF])
 
     sys.exit()
-    '''
 
     #
-
+    '''
 
 
     if os.path.isfile(file_path_pcd_i)==0 or os.path.isfile(file_path_feat_i)==0:
@@ -625,7 +777,7 @@ def main(args):
     #  "Search_3D" Class Instance Generation
     ###
 
-    s3d = Search3D(file_path_pcd_i, file_path_query_pcd, file_path_feat_i, isVisualizationON)
+    s3d = Search3D(file_path_pcd_i, file_path_query_pcd, file_path_feat_i, isVisualizationON, input_type)
 
     ###
     # Visual Dictionary Generation
@@ -651,7 +803,8 @@ def main(args):
     ###
     print('Search Box Query in Point Cloud')
     boxId = 0
-    s3d.query(boxId, k_NN)
+    #s3d.query(boxId, k_NN)
+    s3d.query_given_BB(boxId, k_NN, feat_extractor)
 
     ## end timer
     if not isVisualizationON:
