@@ -11,6 +11,8 @@ import copy
 import tkinter.filedialog
 
 
+from concurrent.futures import ThreadPoolExecutor
+
 
 
 from lib.feature_extractor import FeatureExtractor
@@ -275,14 +277,96 @@ class Search3D:
                 ## VLAD function is from VLAD library (https://github.com/jorjasso/VLAD)
                 v = VLAD(box_p_feat, self.visualDictionary)
                 self.descriptorsVLAD.append(v)
-                self.idBox.append(ind_p)
+                #self.idBox.append(ind_p)
 
-                self.descriptorFCGF.append(box_p_feat)
-                self.pointCoords.append(box_p)
+                #self.descriptorFCGF.append(box_p_feat)
+                #self.pointCoords.append(box_p)
 
         self.descriptorsVLAD = np.asarray(self.descriptorsVLAD)
 
-        self.No_box = len(self.idBox)
+        #self.No_box = len(self.idBox)
+
+    ##
+    # With multi thread
+    ##
+
+    def extractBoxes_VLADdesc_given_BB_multhread(self):
+
+        self.descriptorsVLAD = list()
+
+        if self.input_type == 'mesh':
+            pcd_in = o3d.io.read_triangle_mesh(self.path_query_pcd)
+            pcd_in.compute_vertex_normals()
+        if self.input_type == 'pcd':
+            pcd_in = o3d.io.read_point_cloud(self.path_query_pcd)
+        dummy_box = pcd_in.get_axis_aligned_bounding_box()
+
+        box_scale = 1.2  # 0.5
+        box_w_max = dummy_box.max_bound
+        box_w_min = dummy_box.min_bound
+        box_w_x = box_scale * abs(box_w_max[0] - box_w_min[0])
+        box_w_y = box_scale * abs(box_w_max[1] - box_w_min[1])
+        box_w_z = box_scale * abs(box_w_max[2] - box_w_min[2])
+
+        ## Multi thread - debug
+
+        ## TODO: I am here.
+
+        ## Multi thread - debug
+
+        ## For each box in the point cloud, VLAD descriptors are computed.
+        ##for ind_p in list(range(0, self.coord_i.shape[0],self.sample_step_size)):
+        for ind_p in tqdm(range(0, self.coord_i.shape[0], self.sample_step_size)):
+
+
+            ## Creation of a box
+            mesh_box = o3d.geometry.TriangleMesh.create_box(width=box_w_x, height=box_w_y, depth=box_w_z)
+            mesh_box.paint_uniform_color([0.9, 0.1, 0.1])
+
+            ## Locate center of box to the origin
+            mat_trans = np.eye((4))
+            mat_trans[0, 3] = -box_w_x / 2
+            mat_trans[1, 3] = -box_w_y / 2
+            mat_trans[2, 3] = -box_w_z / 2
+            mesh_box.transform(mat_trans)
+
+
+            ## Locate center of box to the point location
+            mat_trans = np.eye((4))
+            mat_trans[0, 3] = self.coord_i[ind_p, 0]
+            mat_trans[1, 3] = self.coord_i[ind_p, 1]
+            mat_trans[2, 3] = self.coord_i[ind_p, 2]
+            mesh_box.transform(mat_trans)
+
+            ## We store the all boxes in a list named "self.meshBox"
+            self.meshBox.append(mesh_box)
+
+            ## Sampling Points in the Box:
+
+            box_w = max(box_w_x, box_w_y, box_w_z)
+
+            thresh = math.sqrt(3) * box_w / 2
+            q_point = self.coord_i[ind_p, :]
+            q_point_arr = np.tile(q_point, (self.coord_i.shape[0], 1))
+            dist_arr = q_point_arr - self.coord_i
+            dist = np.linalg.norm(dist_arr, axis=1)
+            box_p_ind = np.where(dist <= thresh)[0]
+
+            ## Container for coordinates of points in the Box
+            box_p = self.coord_i[box_p_ind, :]
+            ## Container for FCGF features of points in the Box
+            box_p_feat = self.feat_i[box_p_ind, :]
+
+            ## Calling VLAD descriptor extractor
+            if box_p_feat is not None:
+                ## Previously computed "self.visualDictionary" is used here
+                ## VLAD function is from VLAD library (https://github.com/jorjasso/VLAD)
+                v = VLAD(box_p_feat, self.visualDictionary)
+                self.descriptorsVLAD.append(v)
+
+
+        self.descriptorsVLAD = np.asarray(self.descriptorsVLAD)
+
 
     def computeIndexBallTree(self):
         self.tree = indexBallTree(self.descriptorsVLAD, self.leafSize)
@@ -483,66 +567,81 @@ class Search3D:
             v = VLAD(queryBox_descriptor_FGCF, self.visualDictionary)
             v = v.reshape(1, -1)
 
-            # find the k most relevant images
-            # using previously generated "balltree"
-            dist, ind = self.tree.query(v, self.k_retrieve)
+            ## DEBUG - kretrieve
+            search_continue = True
 
-            ## Initialization of Visuzation - Empty open3D Scene
-            visual_list = []
+            while search_continue:
 
-            visual_list.append(spheres_i)
-            visual_list.append(spheres_match_i)
+                # find the k most relevant images
+                # using previously generated "balltree"
+                dist, ind = self.tree.query(v, self.k_retrieve)
 
-            # Draw the box - Query
+                ## Initialization of Visuzation - Empty open3D Scene
+                visual_list = []
+
+                visual_list.append(spheres_i)
+                visual_list.append(spheres_match_i)
+
+                # Draw the box - Query
 
 
-            visual_list.append(BB_pcd_in_query)
+                visual_list.append(BB_pcd_in_query)
 
 
-            ## Iteration through neaarest neighor matches
-            ## and draw each box on the point cloud
-            mesh_box_stack = []
-            tmp_cnt = 0
-            for ind_match in ind[0]:
+                ## Iteration through neaarest neighor matches
+                ## and draw each box on the point cloud
+                mesh_box_stack = []
+                tmp_cnt = 0
+                for ind_match in ind[0]:
 
-                # Init
-                IoU = False
+                    # Init
+                    IoU = False
 
-                ## Draw the box - Match
-                mesh_box_vertices_match = copy.deepcopy(self.meshBox[ind_match])
+                    ## Draw the box - Match
+                    mesh_box_vertices_match = copy.deepcopy(self.meshBox[ind_match])
 
-                if tmp_cnt == 0:
-                    mesh_box_stack.append(copy.deepcopy(mesh_box_vertices_match))
-                    mesh_box_vertices_match.transform(mat_trans)
-                    ## Matched box is colored in blue
-                    lines_set_match_box = convertMeshBox2LineBox(mesh_box_vertices_match, self.color_dict["blue"])
-                    visual_list.append(lines_set_match_box)
-
-                ## TODO: Compare matched mesh boxes wrt Intersection over Union (IoU)
-                if tmp_cnt > 0:
-
-                    #IoU = mesh_box_stack[-1].is_intersecting(mesh_box_vertices_match)
-
-                    for m_tmp in mesh_box_stack:
-                        IoU_t = m_tmp.is_intersecting(mesh_box_vertices_match)
-                        IoU = IoU or IoU_t
-
-                    if not IoU:
+                    if tmp_cnt == 0:
                         mesh_box_stack.append(copy.deepcopy(mesh_box_vertices_match))
-
                         mesh_box_vertices_match.transform(mat_trans)
                         ## Matched box is colored in blue
                         lines_set_match_box = convertMeshBox2LineBox(mesh_box_vertices_match, self.color_dict["blue"])
-
                         visual_list.append(lines_set_match_box)
 
+                    ## TODO: Compare matched mesh boxes wrt Intersection over Union (IoU)
+                    if tmp_cnt > 0:
 
-                #visual_list_tmp = visual_list.copy()
-                #visual_list_tmp.append(lines_set_match_box)
+                        #IoU = mesh_box_stack[-1].is_intersecting(mesh_box_vertices_match)
 
-                #visualize_point_cloud(visual_list_tmp)
+                        for m_tmp in mesh_box_stack:
+                            IoU_t = m_tmp.is_intersecting(mesh_box_vertices_match)
+                            IoU = IoU or IoU_t
 
-                tmp_cnt = tmp_cnt + 1
+                        if not IoU:
+                            mesh_box_stack.append(copy.deepcopy(mesh_box_vertices_match))
+
+                            mesh_box_vertices_match.transform(mat_trans)
+                            ## Matched box is colored in blue
+                            lines_set_match_box = convertMeshBox2LineBox(mesh_box_vertices_match, self.color_dict["blue"])
+
+                            visual_list.append(lines_set_match_box)
+
+
+                    #visual_list_tmp = visual_list.copy()
+                    #visual_list_tmp.append(lines_set_match_box)
+
+                    #visualize_point_cloud(visual_list_tmp)
+
+                    tmp_cnt = tmp_cnt + 1
+
+                #print('len(visual_list) = ', len(visual_list))
+                #print('self.k_retrieve = ', self.k_retrieve)
+                #print('k_NN = ', k_NN)
+                if len(visual_list) >= (k_NN + 2):
+                    search_continue = False
+                else:
+                    self.k_retrieve = self.k_retrieve + 10
+
+            ## DEBUG - kretrieve
 
             if self.visualization:
                 visualize_point_cloud(visual_list)
@@ -575,7 +674,7 @@ class Search3D:
                     print('Another query search is started using boxId = {} \n'.format(boxId))
             else:
                 self.isSearchAvaliable = False
-            
+
 
 
 def pick_points(pcd):
@@ -616,13 +715,13 @@ def main(args):
     #PATH_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_7_frag.ply"
     #PATH_QUERY_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_7.ply"
 
-    PATH_PCD = "/home/akin/workspace/All_Data/Tanks_and_Templates/Caterpillar/GT/Caterpillar.ply"
+    #PATH_PCD = "/home/akin/workspace/All_Data/Tanks_and_Templates/Caterpillar/GT/Caterpillar.ply"
+    PATH_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_1.ply"
     PATH_QUERY_PCD = "/home/akin/workspace/workspace_applications/Deep_3D_Search/FCGF_submit/Search_3D/query_pcd/cropped_query.ply"
 
     ## User dialog for input file
 
 
-    #PATH_PCD = askopenfilename()
     PATH_PCD = tkinter.filedialog.askopenfilename()
 
 
@@ -790,7 +889,8 @@ def main(args):
     ###
     print('Computing VLAD Descriptors')
     #s3d.extractBoxes_VLADdesc()
-    s3d.extractBoxes_VLADdesc_given_BB()
+    #s3d.extractBoxes_VLADdesc_given_BB()
+    s3d.extractBoxes_VLADdesc_given_BB_multhread()
 
     ###
     # IndexballTree Generation
