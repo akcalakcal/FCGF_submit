@@ -99,6 +99,7 @@ class Search3D:
         self.visualization = isVisualizationON
         self.input_type = input_type
         self.pcd_apart = 10
+        self.BB_thresh = 0.5
 
     def read_inputs(self):
         data_i = np.load(self.path_to_feat)
@@ -293,13 +294,17 @@ class Search3D:
     def extractBoxes_VLADdesc_given_BB_multhread(self):
 
         self.descriptorsVLAD = list()
+        self.meshBox = list()
 
         if self.input_type == 'mesh':
             pcd_in = o3d.io.read_triangle_mesh(self.path_query_pcd)
             pcd_in.compute_vertex_normals()
         if self.input_type == 'pcd':
             pcd_in = o3d.io.read_point_cloud(self.path_query_pcd)
+
         dummy_box = pcd_in.get_axis_aligned_bounding_box()
+
+
 
         box_scale = 1.2  # 0.5
         box_w_max = dummy_box.max_bound
@@ -308,16 +313,46 @@ class Search3D:
         box_w_y = box_scale * abs(box_w_max[1] - box_w_min[1])
         box_w_z = box_scale * abs(box_w_max[2] - box_w_min[2])
 
-        ## Multi thread - debug
+        ## Find FCGF features wihin the query bounding box
 
-        ## TODO: I am here.
+        pcd_in_query = o3d.io.read_triangle_mesh(self.path_query_pcd)
 
-        ## Multi thread - debug
+        box_p_query_ind = []
+        for p_q in pcd_in_query.vertices:
+            index_pos = np.where((self.coord_i[:, 0] == p_q[0]) & (self.coord_i[:, 1] == p_q[1]) & (self.coord_i[:, 2] == p_q[2]))
+            if index_pos[0]:
+                box_p_query_ind.append(index_pos[0])
 
-        ## For each box in the point cloud, VLAD descriptors are computed.
-        ##for ind_p in list(range(0, self.coord_i.shape[0],self.sample_step_size)):
-        for ind_p in tqdm(range(0, self.coord_i.shape[0], self.sample_step_size)):
+        ## Container for FCGF features of points in the query Box
+        box_p_query_ind = np.array(box_p_query_ind)[:, 0]
+        box_p_query_feat = self.feat_i[box_p_query_ind, :]
+        box_p_query_feat_mean = np.mean(box_p_query_feat, axis=0)
 
+        box_p_query_feat = np.tile(box_p_query_feat_mean, (self.feat_i.shape[0], 1))
+
+
+        dist_feat_arr = box_p_query_feat - self.feat_i
+        dist_feat = np.linalg.norm(dist_feat_arr, axis=1)
+        min_dist_feat = np.min(dist_feat)
+        med_dist_feat = np.median(dist_feat)
+        max_dist_feat = np.max(dist_feat)
+        thresh_feat = self.BB_thresh #0.5 #0.2 * (med_dist_feat + min_dist_feat)
+        box_p_feat_ind = np.where(dist_feat <= thresh_feat)[0]
+
+
+        #for ind_p in tqdm(range(0, self.coord_i.shape[0], self.sample_step_size)):
+        for ind_p in tqdm(box_p_feat_ind):
+
+            ## TODO: Outlier rejection
+            ##       Description: We want to compute vlad descriptors for only the 3D points of similar FCG features
+            ## DEBUG
+
+
+
+            ## DEBUG
+
+
+            ## Create mesh_box - experiment
 
             ## Creation of a box
             mesh_box = o3d.geometry.TriangleMesh.create_box(width=box_w_x, height=box_w_y, depth=box_w_z)
@@ -329,7 +364,6 @@ class Search3D:
             mat_trans[1, 3] = -box_w_y / 2
             mat_trans[2, 3] = -box_w_z / 2
             mesh_box.transform(mat_trans)
-
 
             ## Locate center of box to the point location
             mat_trans = np.eye((4))
@@ -363,10 +397,14 @@ class Search3D:
                 ## VLAD function is from VLAD library (https://github.com/jorjasso/VLAD)
                 v = VLAD(box_p_feat, self.visualDictionary)
                 self.descriptorsVLAD.append(v)
+                # self.idBox.append(ind_p)
 
+                # self.descriptorFCGF.append(box_p_feat)
+                # self.pointCoords.append(box_p)
 
         self.descriptorsVLAD = np.asarray(self.descriptorsVLAD)
 
+        # self.No_box = len(self.idBox)
 
     def computeIndexBallTree(self):
         self.tree = indexBallTree(self.descriptorsVLAD, self.leafSize)
@@ -722,7 +760,7 @@ def main(args):
     ## User dialog for input file
 
 
-    PATH_PCD = tkinter.filedialog.askopenfilename()
+    #PATH_PCD = tkinter.filedialog.askopenfilename()
 
 
     ##
@@ -889,8 +927,8 @@ def main(args):
     ###
     print('Computing VLAD Descriptors')
     #s3d.extractBoxes_VLADdesc()
-    s3d.extractBoxes_VLADdesc_given_BB()
-    #s3d.extractBoxes_VLADdesc_given_BB_multhread()
+    #s3d.extractBoxes_VLADdesc_given_BB()
+    s3d.extractBoxes_VLADdesc_given_BB_multhread()
 
     ###
     # IndexballTree Generation
