@@ -889,8 +889,8 @@ def main(args):
     ###
     print('Computing VLAD Descriptors')
     #s3d.extractBoxes_VLADdesc()
-    #s3d.extractBoxes_VLADdesc_given_BB()
-    s3d.extractBoxes_VLADdesc_given_BB_multhread()
+    s3d.extractBoxes_VLADdesc_given_BB()
+    #s3d.extractBoxes_VLADdesc_given_BB_multhread()
 
     ###
     # IndexballTree Generation
