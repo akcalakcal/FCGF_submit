@@ -99,7 +99,7 @@ class Search3D:
         self.visualization = isVisualizationON
         self.input_type = input_type
         self.pcd_apart = 10
-        self.BB_thresh = 0.5
+        self.BB_thresh = 0.55 #0.5
 
     def read_inputs(self):
         data_i = np.load(self.path_to_feat)
@@ -701,6 +701,13 @@ class Search3D:
                         pcd_in.compute_vertex_normals()
                         demo_crop_geometry(pcd_in)
 
+                    ## DEBUG
+
+                    k_retrieve_new = input('Number of Search Results Shown \n')
+                    self.k_retrieve = int(k_retrieve_new)
+
+                    ## DEBUG
+
                     ## Extract Vlad Descriptors given new =ly selected BB
                     self.extractBoxes_VLADdesc_given_BB()
 
@@ -760,7 +767,7 @@ def main(args):
     ## User dialog for input file
 
 
-    #PATH_PCD = tkinter.filedialog.askopenfilename()
+    PATH_PCD = tkinter.filedialog.askopenfilename()
 
 
     ##
